@@ -9,7 +9,6 @@
 
 #include <EthernetENC.h>
 #include "Hardware_check.h"
-//#include "UART_logs.h"
 #include "Defines.h"
 #include "Monitor.h"
 
@@ -26,6 +25,7 @@ void setup()
 void loop()
 {
     mon.ethernet_check_connetion();
+    
     #if PING_ENABLE
       mon.ping_response();
     #endif

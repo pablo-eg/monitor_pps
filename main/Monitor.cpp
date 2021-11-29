@@ -2,22 +2,27 @@
 
 
 IPAddress actualIP;
+// monitor MAC
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
+// monitor IP
 IPAddress ip(172, 17, 200, 57);
-//IPAddress my_dns(192, 168, 100, 1);
 
 
 #if PING_ENABLE
-    unsigned int localPort = 8888;      // local port to listen on
+    unsigned int localPort = 8888;
     EthernetUDP Udp;
 #endif
 
 EthernetClient ethClient;
+// objeto cliente mqtt
 PubSubClient client(ethClient);
+// broker IP
 IPAddress broker(172, 16, 19, 101);
 
+// objeto dht (sensor de temperatura)
 DHT dht(DHTPIN, DHTTYPE);
 
+// odjeto sensor corriente/tension de la bateria y el panel
 Adafruit_INA219 ina_battery(0x40);
 Adafruit_INA219 ina_panel(0x41);
 
@@ -27,20 +32,22 @@ Adafruit_INA219 ina_panel(0x41);
 #else
     TIM_TypeDef *Instance = TIM2;
 #endif
-// Instantiate HardwareTimer object. Thanks to 'new' instanciation, HardwareTimer is not destructed when setup() function is finished.
 HardwareTimer *MyTim = new HardwareTimer(Instance);
 
+// los buffers son vectores que contienen las muestras
 int input_vac_buffer[SAMPLES];
 int input_iac_buffer[SAMPLES];
 int output_vac_buffer[SAMPLES];
 int output_iac_buffer[SAMPLES];
 bool buffers_filled = false;
 
+// los valores de los offset son calculados en la calibración 
 int input_vac_offset  = 512;
 int output_vac_offset = 512;
 int input_iac_offset  = 500;
 int output_iac_offset = 500;
 
+// cuando se expira el timer del muestreo se llama a esta funcion
 void timer_callback(void);
 
 Monitor::Monitor()
@@ -48,6 +55,7 @@ Monitor::Monitor()
 
 }
 
+// calcula los offset de los sensores tomando SAMPLES muestras y haciendo un promedio
 void Monitor::calibra_sensores()
 {
     #if(MONITOR_LOGLEVEL>0)
@@ -94,6 +102,7 @@ void Monitor::calibra_sensores()
     #endif 
 }
 
+// setea algunos pines y la frecuencia del timer de muestreo
 void Monitor::hardware_setup()
 {
     pinMode(ETHERNET_LED, OUTPUT); 
@@ -103,6 +112,7 @@ void Monitor::hardware_setup()
     MyTim->attachInterrupt(timer_callback);
 }
 
+// inicializa los sensores
 void Monitor::hardware_init()
 {
     digitalWrite(ETHERNET_LED, LOW);        // tener en cuenta que la logica en este led esta invertida
@@ -141,6 +151,7 @@ void Monitor::hardware_init()
     calibra_sensores();
 }
 
+// despierta al modulo ethernet. Cuando esta activo consume 120 mA aprox
 void Monitor::enc28j60_power_on(void)
 {
     #if(MONITOR_LOGLEVEL>0)
@@ -151,6 +162,7 @@ void Monitor::enc28j60_power_on(void)
     Enc28J60Network::powerOn();
 }
 
+// manda a dormir al modulo ethernet. Cuando esta inactivo consume menos de 1 mA
 void Monitor::enc28j60_power_off(void)
 {
     #if(MONITOR_LOGLEVEL>0)
@@ -161,6 +173,7 @@ void Monitor::enc28j60_power_off(void)
     Enc28J60Network::powerOff();
 }
 
+// intenta conectarse por Ethernet con la IP seteada
 void Monitor::ethernet_init()
 {
     Ethernet.init(SS_PIN);
@@ -203,6 +216,7 @@ void Monitor::ethernet_init()
     }
 }
 
+// si ha pasado cierto tiempo chequea la conexión ethernet e intenta conectarse
 void Monitor::ethernet_check_connetion()
 {
     const unsigned long intervalo = 5000;     // intervalo de tiempo en el que realiza el checkeo
@@ -252,6 +266,7 @@ void Monitor::ethernet_check_connetion()
     }
 #endif
 
+// cuando se recibe un mensaje MQTT se llama a esta funcion
 void callback(char* topic, byte* payload, unsigned int length)
 {
     char buffer[20];
@@ -281,6 +296,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     }
 }
 
+// setea el cliente MQTT
 void Monitor::mqtt_client_init()
 {
     //client.setServer("broker.emqx.io", 1883);
@@ -288,6 +304,7 @@ void Monitor::mqtt_client_init()
     client.setCallback(callback);
 }   
 
+// checkea la conexion con el broker
 void Monitor::mqtt_check_connection()
 {
     if(ethernet_connected)
@@ -358,6 +375,7 @@ void Monitor::mqtt_check_connection()
 
 }
 
+// publica en el broker las mediciones
 void Monitor::mqtt_publish()
 {
     if(mqtt_connected)
@@ -488,6 +506,7 @@ void Monitor::mqtt_publish()
     }
 }
 
+// cuando expira el timer del muestreo se llama a esta funcion para que tome una nueva muestra
 void timer_callback()
 {
     static int i = 0;
@@ -502,17 +521,17 @@ void timer_callback()
     {
         i = 0;
         buffers_filled = true;
-        MyTim->pause();
+        MyTim->pause();         // cuando se completa el total de muestras, se pausa el timer
     }
 }
 
+// manda a dormir al sistema logrando un consumos menor al miliamper
 void Monitor::sleep(unsigned long sleep_time)
 {
         unsigned long t = sleep_time;
         client.disconnect();
         delay(1000);
         Enc28J60Network::powerOff();
-        //delay(sleep_time);
         delay(1000);
         STM32SimpleLowPower::deepSleep(20);
         delay(1000);
