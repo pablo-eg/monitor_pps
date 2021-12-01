@@ -1,0 +1,62 @@
+version: "3.8"
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:1.6.10
+    container_name: mosquitto
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    restart: always
+    ports:
+      - "1883:1883"
+    networks:
+     - iot
+  
+  influxdb:
+    image: influxdb:1.8.10
+    container_name: influxdb
+    restart: always
+    ports:
+      - "8086:8086"
+    networks:
+      - iot
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+  
+  telegraf:
+    image: telegraf
+    container_name: telegraf
+    restart: always
+    volumes:
+      - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      - mosquitto
+      - influxdb
+    networks:
+      - iot
+  
+  grafana:
+    image: grafana/grafana:8.2.0
+    container_name: grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    networks:
+      - iot
+    volumes:
+      - grafana-data:/var/lib/grafana
+    environment:
+      - 'GF_SMTP_ENABLED=true'
+      - 'GF_SMTP_HOST=smtp.gmail.com:587'
+      - 'GF_SMTP_USER='
+      - 'GF_SMTP_PASSWORD='
+      - 'GF_SMTP_FROM_ADDRESS='
+    depends_on:
+      - influxdb
+
+networks:
+ iot:
+
+volumes:
+  influxdb-data:
+  grafana-data:
